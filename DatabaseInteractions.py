@@ -34,6 +34,16 @@ def get_list_of_bills():
     return cursor.fetchall()
 
 
+def add_new_bill(name, amount, notes):
+    command = """
+    INSERT INTO 'Bills - Master' (Name, Amount, Notes) 
+    VALUES (?, ?, ?) 
+    """
+    cursor.execute(command, (name, amount, notes))
+    connection.commit()
+
+
+
 
 
 
