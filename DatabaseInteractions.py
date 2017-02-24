@@ -1,14 +1,19 @@
 import sqlite3
+from datetime import date
+
+current_month_year = date.today().strftime('%m%Y')  # Returns current month/year in format of 022017
 
 connection = sqlite3.connect("finances.db")
 cursor = connection.cursor()
+
 
 def initial_db_setup():
     command = """
     CREATE TABLE IF NOT EXISTS 'Bills - Master'(
     Name TEXT PRIMARY KEY,
     Amount NUMERIC,
-    Notes TEXT
+    Notes TEXT,
+    Paid INTEGER
     );
     CREATE TABLE IF NOT EXISTS 'Credit - Master'(
     Name TEXT PRIMARY KEY,
@@ -21,25 +26,37 @@ def initial_db_setup():
     Name TEXT PRIMARY KEY,
     Balance NUMERIC,
     Interest NUMERIC
-    )
-    """
-    cursor.execute(command)
+    );
+    CREATE TABLE IF NOT EXISTS 'Bills - {}'
+    AS SELECT * FROM 'Bills - Master'
+    """.format(current_month_year)
+
+    command_list = command.split(";")
+    [cursor.execute(command) for command in command_list]  # Cycles through each SQL statement separated by ;
 
 
 def get_list_of_bills():
     command = """
-    SELECT * FROM 'Bills - Master'
-    """
+    SELECT * FROM 'Bills - {}'
+    """.format(current_month_year)
     cursor.execute(command)
     return cursor.fetchall()
 
 
-def add_new_bill(name, amount, notes):
+def add_new_bill(name, amount, notes, recurring):
     command = """
-    INSERT INTO 'Bills - Master' (Name, Amount, Notes) 
-    VALUES (?, ?, ?) 
-    """
-    cursor.execute(command, (name, amount, notes))
+    INSERT INTO 'Bills - {}' (Name, Amount, Notes, Paid)
+    VALUES (?, ?, ?, 0)
+    """.format(current_month_year)
+    if recurring:
+        command += ";"
+        command += """
+        INSERT INTO 'Bills - Master' (Name, Amount, Notes, Paid)
+        VALUES (?, ?, ?, 0)
+        """
+
+    command_list = command.split(";")
+    [cursor.execute(command, (name, amount, notes)) for command in command_list]
     connection.commit()
 
 
