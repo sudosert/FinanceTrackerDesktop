@@ -3,6 +3,8 @@ import tkinter
 from tkinter import ttk
 from tkinter import *
 
+selected_currency = "£"  # This will be a user selected variable that will change the currency label
+
 
 class BlankForm:
 
@@ -17,13 +19,21 @@ class MainForm(BlankForm):
     
     def __init__(self, title):
 
-        #  Call to init of superclass to inherit values
+        # Global variables
+        global selected_currency
+
+        # Call to init of superclass to inherit values
         BlankForm.__init__(self, title)
 
         # Core Objects
         self.notebook = ttk.Notebook(self.root)
         self.page_1_summary = Frame(self.notebook)
         self.page_2_bills = Frame(self.notebook)
+
+        # Widgets Variables
+        self.bill_name_var = StringVar()
+        self.bill_amount_var = StringVar()
+        self.bill_paid_var = IntVar()
         
         # Summary Tab Widgets
         self.left_to_spend_frame = LabelFrame(self.page_1_summary, text="Spending Money Remaining:")
@@ -36,12 +46,18 @@ class MainForm(BlankForm):
         # Bills Tab Widgets
         self.bills_to_pay_frame = LabelFrame(self.page_2_bills, text="To Pay:")
         self.bills_to_pay_listbox = Listbox(self.bills_to_pay_frame)
+        self.bills_to_pay_listbox.bind("<<ListboxSelect>>",
+                                       lambda x: self.on_list_select_binding(self.bills_to_pay_listbox))
         self.bills_paid_frame = LabelFrame(self.page_2_bills, text="Paid:")
         self.bills_paid_listbox = Listbox(self.bills_paid_frame)
+        self.bills_paid_listbox.bind("<<ListboxSelect>>",
+                                     lambda x: self.on_list_select_binding(self.bills_paid_listbox))
         self.bill_info_frame = LabelFrame(self.page_2_bills, text="Bill Info:")
-        self.bill_name_entry = Entry(self.bill_info_frame)
-        self.bill_amount_entry = Entry(self.bill_info_frame)
-        self.bill_paid_checkbutton = Checkbutton(self.bill_info_frame, text="Paid")
+        self.bill_name_entry = Entry(self.bill_info_frame, textvar=self.bill_name_var,
+                                     state="readonly")  # Bill name is primary key in DB so should not be edited
+        self.bill_amount_entry = Entry(self.bill_info_frame, textvar=self.bill_amount_var)
+        self.save_changes_button = Button(self.bill_info_frame, text="Submit", command=self.save_changes_on_click)
+        self.bill_paid_checkbutton = Checkbutton(self.bill_info_frame, text="Paid", var=self.bill_paid_var)
         self.bill_summary_frame = LabelFrame(self.page_2_bills, text="Summary:")
         self.bill_total_paid_entry = Entry(self.bill_summary_frame)
         self.bill_remains_to_pay_entry = Entry(self.bill_summary_frame)
@@ -84,6 +100,7 @@ class MainForm(BlankForm):
         self.bill_name_entry.pack()
         self.bill_amount_entry.pack()
         self.bill_paid_checkbutton.pack()
+        self.save_changes_button.pack()
         self.bill_summary_frame.grid(row=2, column=0, columnspan=2, sticky=W+E)
         self.bill_total_paid_entry.pack()
         self.bill_remains_to_pay_entry.pack()
@@ -92,7 +109,39 @@ class MainForm(BlankForm):
         self.update_values()
 
     def update_values(self):  # Updates values in widgets
-        populate_bill_list_box(DatabaseInteractions.get_list_of_bills(), self.bills_to_pay_listbox)
+        list_of_bills = DatabaseInteractions.get_list_of_bills()
+        self.populate_bill_list_box(list_of_bills, self.bills_to_pay_listbox, False)  # False for To Pay
+        self.populate_bill_list_box(list_of_bills, self.bills_paid_listbox, True)  # True for Paid
+
+    def on_list_select_binding(self, listbox):  # Updates entry boxes/checkboxes with selected bill data
+        current_selection = listbox.curselection()
+        if not current_selection:  # Prevent null selections being processed
+            return
+        bill_name = listbox.get(current_selection[0])
+        bill_amount, bill_paid = self.retrieve_info_current_selection(bill_name)
+        self.bill_name_var.set(bill_name)
+        self.bill_amount_var.set((selected_currency + str(bill_amount)))
+        self.bill_paid_var.set(bill_paid)
+
+    def save_changes_on_click(self):
+        DatabaseInteractions.update_selected_bill(self.bill_name_var.get(),
+                                                  self.bill_amount_var.get().replace(selected_currency, ""),
+                                                  self.bill_paid_var.get())
+        self.update_values()
+
+    @staticmethod
+    def populate_bill_list_box(bill_list, list_box, paid_listbox):
+        list_box.delete(0, END)  # Removes values already in listbox to prevent duplication
+        if paid_listbox:  # Variable allows method to determine which listbox is being populated
+            [list_box.insert(END, bill[0]) for bill in bill_list if bill[3]]
+        else:
+            [list_box.insert(END, bill[0]) for bill in bill_list if not bill[3]]
+
+    @staticmethod
+    def retrieve_info_current_selection(selection_text):
+        amount, paid = DatabaseInteractions.get_selected_bill_info(selection_text)
+        return tuple([amount, paid])
+
 
     def add_new_bill_form(self):
 
@@ -138,7 +187,7 @@ class AddNewBillWindow(BlankSubWindow):
 
         # Define Checkbutton Widgets
         self.bill_recurring_checkbutton = Checkbutton(self.bill_amount_frame, text="Recurring",
-                                                      variable=self.recurring_var, onvalue=True, offvalue=False)
+                                                      variable=self.recurring_var)
 
         # Define Button Widgets
         self.add_bill_button = Button(self.sub_root, text="Add Bill", command=
@@ -165,8 +214,3 @@ class AddNewBillWindow(BlankSubWindow):
         self.bill_notes_frame.pack()
         self.bill_notes_text.pack()
         self.add_bill_button.pack()
-
-
-def populate_bill_list_box(bill_list, list_box):
-    list_box.delete(0, END)  # Removes values already in listbox to prevent duplication
-    [list_box.insert(END, bill[0]) for bill in bill_list]
