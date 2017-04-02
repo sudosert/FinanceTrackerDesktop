@@ -1,9 +1,12 @@
 import DatabaseInteractions
 import tkinter
+from datetime import datetime
+from dateutil.relativedelta import relativedelta # Allows for the adding of months to datetime objects
 from tkinter import ttk
 from tkinter import *
 
 selected_currency = "£"  # This will be a user selected variable that will change the currency label
+current_date = datetime.now()
 
 
 class BlankForm:
@@ -20,7 +23,7 @@ class MainForm(BlankForm):
     def __init__(self, title):
 
         # Global variables
-        global selected_currency
+        global selected_currency, current_date
 
         # Call to init of superclass to inherit values
         BlankForm.__init__(self, title)
@@ -31,11 +34,14 @@ class MainForm(BlankForm):
         self.page_2_bills = Frame(self.notebook)
 
         # Widgets Variables
+        self.title_var = StringVar()
         self.bill_name_var = StringVar()
         self.bill_amount_var = StringVar()
         self.bill_paid_var = IntVar()
+        self.summary_owed = StringVar()
+        self.summary_paid = StringVar()
         
-        # Summary Tab Widgets
+        # Summary Tab Widgets - - Listed in Packing Order
         self.left_to_spend_frame = LabelFrame(self.page_1_summary, text="Spending Money Remaining:")
         self.total_left_to_spend_entry = Entry(self.left_to_spend_frame)
         self.days_until_paid_entry = Entry(self.left_to_spend_frame)
@@ -43,7 +49,8 @@ class MainForm(BlankForm):
         self.add_new_bill_button = Button(self.page_1_summary, text="Add New Bill", 
                                           command=self.add_new_bill_form)
         
-        # Bills Tab Widgets
+        # Bills Tab Widgets - Listed in Packing Order
+        self.title_label = Label(self.page_2_bills, textvar=self.title_var)
         self.bills_to_pay_frame = LabelFrame(self.page_2_bills, text="To Pay:")
         self.bills_to_pay_listbox = Listbox(self.bills_to_pay_frame)
         self.bills_to_pay_listbox.bind("<<ListboxSelect>>",
@@ -53,14 +60,22 @@ class MainForm(BlankForm):
         self.bills_paid_listbox.bind("<<ListboxSelect>>",
                                      lambda x: self.on_list_select_binding(self.bills_paid_listbox))
         self.bill_info_frame = LabelFrame(self.page_2_bills, text="Bill Info:")
-        self.bill_name_entry = Entry(self.bill_info_frame, textvar=self.bill_name_var,
+        self.bill_name_entry = Entry(self.bill_info_frame, textvar=self.bill_name_var, justify="center",
                                      state="readonly")  # Bill name is primary key in DB so should not be edited
-        self.bill_amount_entry = Entry(self.bill_info_frame, textvar=self.bill_amount_var)
-        self.save_changes_button = Button(self.bill_info_frame, text="Submit", command=self.save_changes_on_click)
+        self.bill_amount_entry = Entry(self.bill_info_frame, textvar=self.bill_amount_var, justify="center")
+        self.save_changes_button = Button(self.bill_info_frame, text="Save Changes", command=self.save_changes_on_click)
         self.bill_paid_checkbutton = Checkbutton(self.bill_info_frame, text="Paid", var=self.bill_paid_var)
         self.bill_summary_frame = LabelFrame(self.page_2_bills, text="Summary:")
-        self.bill_total_paid_entry = Entry(self.bill_summary_frame)
-        self.bill_remains_to_pay_entry = Entry(self.bill_summary_frame)
+        self.summary_paid_label = Label(self.bill_summary_frame, text="Paid")
+        self.bill_total_paid_entry = Entry(self.bill_summary_frame, textvar=self.summary_paid, width=10,
+                                           justify="center")
+        self.summary_remains_to_pay_label = Label(self.bill_summary_frame, text="Still to Pay")
+        self.bill_remains_to_pay_entry = Entry(self.bill_summary_frame, textvar=self.summary_owed, width=10,
+                                               justify="center")
+        self.previous_month_button = Button(self.page_2_bills, text="Prev Month",
+                                            command=lambda: self.change_month_on_click(False))
+        self.next_month_button = Button(self.page_2_bills, text="Next Month",
+                                        command=lambda: self.change_month_on_click(True))
 
     def build_form(self):
 
@@ -92,24 +107,31 @@ class MainForm(BlankForm):
     def bills_tab_builder(self):
 
         # Pack Widgets
-        self.bills_to_pay_frame.grid(row=0, column=0)
-        self.bills_to_pay_listbox.pack()
-        self.bills_paid_frame.grid(row=0, column=1)
-        self.bills_paid_listbox.pack()
-        self.bill_info_frame.grid(row=1, column=0, columnspan=2, sticky=W+E)
-        self.bill_name_entry.pack()
-        self.bill_amount_entry.pack()
-        self.bill_paid_checkbutton.pack()
-        self.save_changes_button.pack()
-        self.bill_summary_frame.grid(row=2, column=0, columnspan=2, sticky=W+E)
-        self.bill_total_paid_entry.pack()
-        self.bill_remains_to_pay_entry.pack()
+        self.title_label.grid(row=0, column=0, columnspan=2, pady=(2, 0), padx=2)
+        self.bills_to_pay_frame.grid(row=1, column=0, pady=(0, 2), padx=2)
+        self.bills_to_pay_listbox.pack(fill="both")
+        self.bills_paid_frame.grid(row=1, column=1, pady=(0, 2), padx=2)
+        self.bills_paid_listbox.pack(fill="both")
+        self.bill_info_frame.grid(row=2, column=0, sticky=N+S+W+E, pady=2, padx=2)
+        self.bill_name_entry.pack(pady=(2, 0), padx=2)
+        self.bill_amount_entry.pack(pady=(0, 2), padx=2)
+        self.bill_paid_checkbutton.pack(pady=2, padx=2)
+        self.save_changes_button.pack(pady=(2, 4), padx=2)
+        self.bill_summary_frame.grid(row=2, column=1, sticky=N+S+W+E, pady=2, padx=2)
+        self.summary_paid_label.pack(pady=(2, 0), padx=2)
+        self.bill_total_paid_entry.pack(pady=(0, 2), padx=2)
+        self.summary_remains_to_pay_label.pack(pady=(2, 0), padx=2)
+        self.bill_remains_to_pay_entry.pack(pady=(0, 2), padx=2)
+        self.previous_month_button.grid(row=3, column=0, pady=2, padx=2)
+        self.next_month_button.grid(row=3, column=1, pady=2, padx=2)
 
         #  Refresh Widget Values
         self.update_values()
 
     def update_values(self):  # Updates values in widgets
         list_of_bills = DatabaseInteractions.get_list_of_bills()
+        month_name = current_date.strftime("%B")  # Returns string of current month
+        self.title_var.set("Bills for {} - {}".format(month_name, str(current_date.year)))
         self.populate_bill_list_box(list_of_bills, self.bills_to_pay_listbox, False)  # False for To Pay
         self.populate_bill_list_box(list_of_bills, self.bills_paid_listbox, True)  # True for Paid
 
@@ -129,19 +151,53 @@ class MainForm(BlankForm):
                                                   self.bill_paid_var.get())
         self.update_values()
 
-    @staticmethod
-    def populate_bill_list_box(bill_list, list_box, paid_listbox):
+    def change_month_on_click(self, addition):
+
+        global current_date
+
+        if addition:
+            target_date = current_date + relativedelta(months=1)
+        else:
+            target_date = current_date - relativedelta(months=1)
+        month = target_date.month
+        year = target_date.year
+        if DatabaseInteractions.check_if_table_exists(str(month).zfill(2)+str(year)):
+            current_date = target_date
+            DatabaseInteractions.current_month_year = current_date.strftime('%m%Y')
+            self.clear_bill_info()
+            self.update_values()
+        else:
+            return
+
+    def populate_bill_list_box(self, bill_list, list_box, paid_listbox):
         list_box.delete(0, END)  # Removes values already in listbox to prevent duplication
         if paid_listbox:  # Variable allows method to determine which listbox is being populated
-            [list_box.insert(END, bill[0]) for bill in bill_list if bill[3]]
+            paid = 0
+            for bill in bill_list:
+                if bill[3]:
+                    list_box.insert(END, bill[0])
+                    paid += bill[1]
+            self.summary_paid.set(selected_currency + str(paid))
         else:
-            [list_box.insert(END, bill[0]) for bill in bill_list if not bill[3]]
+            owed = 0
+            for bill in bill_list:
+                if not bill[3]:
+                    list_box.insert(END, bill[0])
+                    owed += bill[1]
+            if not owed:  # Changes Still to Pay entry to green when value is 0, red otherwise
+                self.bill_remains_to_pay_entry.config(background="palegreen1")
+            else:
+                self.bill_remains_to_pay_entry.config(background="IndianRed1")
+            self.summary_owed.set(selected_currency + str(owed))
+
+    def clear_bill_info(self):
+        self.bill_name_var.set("")
+        self.bill_amount_var.set("")
 
     @staticmethod
     def retrieve_info_current_selection(selection_text):
         amount, paid = DatabaseInteractions.get_selected_bill_info(selection_text)
         return tuple([amount, paid])
-
 
     def add_new_bill_form(self):
 

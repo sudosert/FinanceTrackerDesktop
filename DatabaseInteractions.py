@@ -81,5 +81,15 @@ def update_selected_bill(bill_name, bill_amount, bill_paid):
     connection.commit()
 
 
+# Query Functions
+def check_if_table_exists(target_date):
+    command = """
+    SELECT Name FROM sqlite_master
+    WHERE type = 'table' AND name = 'Bills - {}'
+    """.format(target_date)
+    cursor.execute(command)
+    return cursor.fetchone()  # If table does not exist this will return an empty value
+
+
 
 
